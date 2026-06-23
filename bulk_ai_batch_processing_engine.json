@@ -1,0 +1,152 @@
+{
+  "name": "Payment Webhook Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "payment-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "498506dc-d16c-4f3a-bd8c-9ad09a80746c",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -672,
+        96
+      ],
+      "webhookId": "payment-webhook-processor"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-payment-success",
+              "leftValue": "={{ $json.payment_status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "61216a58-c7fe-446a-a07e-68a45e7beaef",
+      "name": "IF Payment Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst strip = (value) => {\n  if (value === null || value === undefined) return '';\n  return String(value).trim();\n};\n\nconst parseAmount = (value) => {\n  const cleaned = String(value ?? '0').replace(/[^\\d.-]/g, '');\n  const parsed = parseFloat(cleaned);\n  return Number.isFinite(parsed) ? parsed : 0;\n};\n\nconst formatCurrency = (amount, currencyCode) => {\n  const code = strip(currencyCode).toUpperCase() || 'USD';\n  try {\n    return new Intl.NumberFormat('en-US', {\n      style: 'currency',\n      currency: code,\n    }).format(amount);\n  } catch {\n    return `${code} ${amount.toFixed(2)}`;\n  }\n};\n\nreturn items.map((item) => {\n  const data = item.json;\n\n  const amount = parseAmount(data.amount);\n  const currency = strip(data.currency || 'USD').toUpperCase();\n\n  return {\n    json: {\n      transaction_id: strip(data.transaction_id),\n      customer_name: strip(data.customer_name),\n      customer_email: strip(data.customer_email || data.email),\n      payment_status: strip(data.payment_status),\n      payment_method: strip(data.payment_method),\n      amount_raw: amount,\n      amount_formatted: formatCurrency(amount, currency),\n      currency,\n      processed_at: new Date().toISOString(),\n      source: 'payment-webhook',\n    },\n  };\n});"
+      },
+      "id": "8fc4b977-59e1-4df8-9285-e2c3193eb6c6",
+      "name": "Map Payment Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-logging-endpoint.example.com/payment-failures",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"status\": \"failed\",\n  \"payment_status\": \"{{ $json.payment_status }}\",\n  \"transaction_id\": \"{{ $json.transaction_id }}\",\n  \"customer_email\": \"{{ $json.customer_email || $json.email }}\",\n  \"amount\": \"{{ $json.amount }}\",\n  \"currency\": \"{{ $json.currency }}\",\n  \"received_at\": \"{{ $now.toISO() }}\",\n  \"raw_payload\": {{ JSON.stringify($json) }}\n}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "937d85c9-ddcb-43cc-bf5d-6468f6d06cc7",
+      "name": "Log Payment Failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -192,
+        208
+      ]
+    }
+  ],
+  "pinData": {
+    "Map Payment Data": [
+      {
+        "json": {
+          "body": {
+            "payment_status": "success",
+            "transaction_id": "TXN-9999",
+            "customer_name": "Abdulazeez Ahmad",
+            "customer_email": "olayinka@example.com",
+            "amount": "1500.50",
+            "currency": "NGN",
+            "payment_method": "card"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "IF Payment Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Payment Success": {
+      "main": [
+        [
+          {
+            "node": "Map Payment Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Payment Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "048afefa-5276-4556-87c7-96f705c37bf6",
+  "meta": {
+    "instanceId": "4ee86339ebda1fcbfe17c9fbe8506980e25239cbd929565aa3db4ec70272a285"
+  },
+  "nodeGroups": [],
+  "id": "mVi3w6eHP6JXfRdp",
+  "tags": []
+}
